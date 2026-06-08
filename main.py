@@ -6,9 +6,9 @@ from io import BytesIO
 import os, re
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from fastapi.responses import StreamingResponse
 
 app = FastAPI()
 
@@ -150,7 +150,16 @@ async def generuj_opis(dane: DaneWizyty):
         prompt = f"Przeanalizuj transkrypcję i uzupełnij szablon w tej kolejności:\nData wizyty: DD.MM.YYYY\nMetryczka pacjenta\n{instrukcja_szablonu}\n\nTranskrypcja:\n{dane.transcript}"
         
         res = m.generate_content(prompt)
-        return {"status": "success", "text": res.text}
+        
+        # 🚨 ZMIANA: Budujemy binarny plik Word w pamięci serwera
+        plik_word = konwertuj_do_docx(res.text)
+        
+        # Odsyłamy czysty strumień pliku docx wprost do przeglądarki Vercela
+        return StreamingResponse(
+            BytesIO(plik_word),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=Opis_Wizyty_MeatPoint.docx"}
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
