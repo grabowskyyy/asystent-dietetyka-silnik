@@ -9,14 +9,12 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-import fastapi.responses as responses
 
 app = FastAPI()
 
-# Zezwalamy Twojej stronie na Vercelu na bezpieczne łączenie się z tym silnikiem
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # W przyszłości wpiszemy tu Twój dokładny adres z Vercela
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,13 +70,11 @@ TEKST_WPROWADZANIE_SUPLEMENTOW_STALY = (
     "To będzie już kompletna dieta."
 )
 
-# Definiujemy format danych, jaki strona www wyśle do robota
 class DaneWizyty(BaseModel):
     api_key: str
     model: str
     transcript: str
 
-# Pomocnicze funkcje generowania Worda (dokładnie Twoje sprawdzone funkcje)
 def add_hyperlink(p, url, text):
     part = p.part
     r_id = part.relate_to(url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
@@ -114,7 +110,6 @@ def konwertuj_do_docx(tekst_md):
     for s in doc.sections: s.top_margin, s.bottom_margin, s.left_margin, s.right_margin = Inches(1.3), Inches(0.8), Inches(0.8), Inches(0.8)
     style = doc.styles['Normal']; font = style.font; font.name, font.size, style.paragraph_format.line_spacing, style.paragraph_format.space_after = 'Arial', Pt(10.5), 1.25, Pt(4)
     
-    # Nagłówek uproszczony dla API
     sec = doc.sections[0]
     p_h = sec.first_page_header.paragraphs[0]
     p_h.add_run("Anna Michalska\n").bold = True
@@ -136,7 +131,6 @@ def konwertuj_do_docx(tekst_md):
             
     b = BytesIO(); doc.save(b); return b.getvalue()
 
-# GŁÓWNY PUNKT WEJŚCIA DLA NASZEJ STRONY WWW
 @app.post("/generuj")
 async def generuj_opis(dane: DaneWizyty):
     try:
@@ -146,7 +140,6 @@ async def generuj_opis(dane: DaneWizyty):
             system_instruction="Jesteś doświadczonym, pedantycznym asystentem klinicznym dla dietetyk Anny Michalskiej. Pisz WYŁĄCZNIE prawdę na podstawie transkrypcji. Brak danych oznaczaj jako [BRAK INFORMACJI]."
         )
         
-        # Szybka budowa szablonu instrukcji
         instrukcja_szablonu = ""
         for n in STRUKTURA_PROTOKOLU:
             if n == "Tyndalizacja:": instrukcja_szablonu += f"## {n}\n{TEKST_TYNDALIZACJA_STALY}\n\n"
@@ -157,6 +150,7 @@ async def generuj_opis(dane: DaneWizyty):
         prompt = f"Przeanalizuj transkrypcję i uzupełnij szablon w tej kolejności:\nData wizyty: DD.MM.YYYY\nMetryczka pacjenta\n{instrukcja_szablonu}\n\nTranskrypcja:\n{dane.transcript}"
         
         res = m.generate_content(prompt)
-        
-        # Zwracamy czysty tekst wygenerowany przez AI
         return {"status": "success", "text": res.text}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
